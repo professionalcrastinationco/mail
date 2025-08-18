@@ -15,27 +15,16 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm">
+    <div className="min-h-screen" style={{ backgroundColor: '#f1f5f9' }}>
+      {/* Header */}
+      <div className="shadow-sm border-b" style={{ backgroundColor: 'white', borderColor: '#cad5e2' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold">Dashboard</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-gray-700">Welcome, {user.email}</span>
-              <form action="/api/auth/signout" method="POST">
-                <button
-                  type="submit"
-                  className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
-                >
-                  Sign Out
-                </button>
-              </form>
-            </div>
+          <div className="flex items-center justify-between h-16">
+            <h1 className="text-xl font-semibold" style={{ color: '#0f172b' }}>Dashboard</h1>
+            <span className="text-sm" style={{ color: '#45556c' }}>Welcome, {user.email}</span>
           </div>
         </div>
-      </nav>
+      </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <GmailTest />

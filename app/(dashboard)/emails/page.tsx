@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
+import { emailHistory } from '@/lib/email-history'
+import { gmailTokenManager } from '@/lib/gmail/token-manager'
 
 interface EmailMessage {
   id: string
@@ -32,6 +33,7 @@ export default function EmailsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
+  const [actionLoading, setActionLoading] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -43,10 +45,12 @@ export default function EmailsPage() {
       setLoading(true)
       setError(null)
 
-      // Get the session with provider token
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session?.provider_token) {
+      // Get Gmail access token using the token manager
+      let accessToken: string
+      try {
+        accessToken = await gmailTokenManager.getAccessToken()
+      } catch (err) {
+        console.error('Failed to get Gmail access token:', err)
         throw new Error('No Gmail access token found')
       }
 
@@ -55,7 +59,7 @@ export default function EmailsPage() {
         'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=50',
         {
           headers: {
-            'Authorization': `Bearer ${session.provider_token}`
+            'Authorization': `Bearer ${accessToken}`
           }
         }
       )
@@ -83,7 +87,7 @@ export default function EmailsPage() {
               `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}`,
               {
                 headers: {
-                  'Authorization': `Bearer ${session.provider_token}`
+                  'Authorization': `Bearer ${accessToken}`
                 }
               }
             )
@@ -191,6 +195,201 @@ export default function EmailsPage() {
     }
   }
 
+  const deleteEmails = async () => {
+    if (selectedEmails.size === 0) return
+    
+    const confirmDelete = window.confirm(`Delete ${selectedEmails.size} email${selectedEmails.size > 1 ? 's' : ''}? This cannot be undone.`)
+    if (!confirmDelete) return
+
+    setActionLoading(true)
+    
+    try {
+      const accessToken = await gmailTokenManager.getAccessToken()
+      if (!accessToken) {
+        throw new Error('No Gmail access token found')
+      }
+
+      const emailIds = Array.from(selectedEmails)
+      console.log(`Deleting ${emailIds.length} emails...`)
+
+      // Prepare history entries
+      const historyEntries = emailIds.map(emailId => {
+        const email = emails.find(e => e.id === emailId)
+        return {
+          email_id: emailId,
+          action: 'delete' as const,
+          action_type: 'manual' as const,
+          details: email ? {
+            subject: email.subject,
+            from: email.from,
+            snippet: email.snippet
+          } : undefined
+        }
+      })
+
+      // Gmail API requires batching for multiple deletes
+      const batchSize = 10
+      let successCount = 0
+      let failCount = 0
+      const successfulDeletes: typeof historyEntries = []
+
+      for (let i = 0; i < emailIds.length; i += batchSize) {
+        const batch = emailIds.slice(i, i + batchSize)
+        
+        const deletePromises = batch.map(async (emailId, index) => {
+          try {
+            const response = await fetch(
+              `https://gmail.googleapis.com/gmail/v1/users/me/messages/${emailId}/trash`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            )
+            
+            if (response.ok) {
+              successCount++
+              const historyIndex = emailIds.indexOf(emailId)
+              successfulDeletes.push(historyEntries[historyIndex])
+              return true
+            } else {
+              console.error(`Failed to delete email ${emailId}: ${response.status}`)
+              failCount++
+              return false
+            }
+          } catch (err) {
+            console.error(`Error deleting email ${emailId}:`, err)
+            failCount++
+            return false
+          }
+        })
+
+        await Promise.all(deletePromises)
+        
+        // Small delay between batches
+        if (i + batchSize < emailIds.length) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+      }
+
+      console.log(`Delete complete: ${successCount} succeeded, ${failCount} failed`)
+
+      // Track successful deletes in history
+      if (successfulDeletes.length > 0) {
+        await emailHistory.trackBulkActions(successfulDeletes)
+      }
+
+      // Remove deleted emails from the UI
+      setEmails(prev => prev.filter(email => !selectedEmails.has(email.id)))
+      setSelectedEmails(new Set())
+      
+      // Show result
+      if (failCount === 0) {
+        alert(`Successfully moved ${successCount} email${successCount > 1 ? 's' : ''} to trash!`)
+      } else {
+        alert(`Moved ${successCount} email${successCount > 1 ? 's' : ''} to trash. ${failCount} failed.`)
+      }
+    } catch (err) {
+      console.error('Error deleting emails:', err)
+      alert('Failed to delete emails. Please try again.')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const markAsRead = async () => {
+    if (selectedEmails.size === 0) return
+    
+    setActionLoading(true)
+    
+    try {
+      const accessToken = await gmailTokenManager.getAccessToken()
+      if (!accessToken) {
+        throw new Error('No Gmail access token found')
+      }
+
+      const emailIds = Array.from(selectedEmails)
+      console.log(`Marking ${emailIds.length} emails as read...`)
+
+      // Prepare history entries
+      const historyEntries = emailIds.map(emailId => {
+        const email = emails.find(e => e.id === emailId)
+        return {
+          email_id: emailId,
+          action: 'mark_read' as const,
+          action_type: 'manual' as const,
+          details: email ? {
+            subject: email.subject,
+            from: email.from,
+            snippet: email.snippet
+          } : undefined
+        }
+      })
+
+      let successCount = 0
+      let failCount = 0
+      const successfulReads: typeof historyEntries = []
+
+      for (const [index, emailId] of emailIds.entries()) {
+        try {
+          const response = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${emailId}/modify`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                removeLabelIds: ['UNREAD']
+              })
+            }
+          )
+          
+          if (response.ok) {
+            successCount++
+            successfulReads.push(historyEntries[index])
+          } else {
+            console.error(`Failed to mark email ${emailId} as read: ${response.status}`)
+            failCount++
+          }
+        } catch (err) {
+          console.error(`Error marking email ${emailId} as read:`, err)
+          failCount++
+        }
+      }
+
+      console.log(`Mark as read complete: ${successCount} succeeded, ${failCount} failed`)
+
+      // Track successful actions in history
+      if (successfulReads.length > 0) {
+        await emailHistory.trackBulkActions(successfulReads)
+      }
+
+      // Update UI to show emails as read
+      setEmails(prev => prev.map(email => {
+        if (selectedEmails.has(email.id)) {
+          return { ...email, unread: false }
+        }
+        return email
+      }))
+      setSelectedEmails(new Set())
+      
+      if (failCount === 0) {
+        alert(`Marked ${successCount} email${successCount > 1 ? 's' : ''} as read!`)
+      } else {
+        alert(`Marked ${successCount} email${successCount > 1 ? 's' : ''} as read. ${failCount} failed.`)
+      }
+    } catch (err) {
+      console.error('Error marking emails as read:', err)
+      alert('Failed to mark emails as read. Please try again.')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -203,6 +402,57 @@ export default function EmailsPage() {
   }
 
   if (error) {
+    // Check if it's a token issue
+    const isTokenError = error.includes('Gmail access token') || error.includes('401')
+    
+    if (isTokenError) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="bg-white border border-gray-200 rounded-lg p-8 max-w-md shadow-lg">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
+                <svg className="h-6 w-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Gmail Session Expired</h3>
+              <p className="text-gray-600 mb-6">Your Gmail connection needs to be refreshed. This happens periodically for security.</p>
+              <div className="space-y-3">
+                <button 
+                  onClick={async () => {
+                    const { error } = await supabase.auth.signInWithOAuth({
+                      provider: 'google',
+                      options: {
+                        scopes: 'https://www.googleapis.com/auth/gmail.modify',
+                        queryParams: {
+                          access_type: 'offline',
+                          prompt: 'consent',
+                        },
+                      },
+                    })
+                    if (error) {
+                      console.error('Re-auth error:', error)
+                      alert('Failed to reconnect to Gmail')
+                    }
+                  }}
+                  className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+                >
+                  Reconnect to Gmail
+                </button>
+                <button 
+                  onClick={fetchEmails}
+                  className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition"
+                >
+                  Try Again
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    
+    // Other errors
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
@@ -226,9 +476,6 @@ export default function EmailsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
-              <Link href="/dashboard" className="hover:opacity-80" style={{ color: '#45556c' }}>
-                ← Back
-              </Link>
               <h1 className="text-xl font-semibold" style={{ color: '#0f172b' }}>Inbox</h1>
               <span className="text-sm" style={{ color: '#45556c' }}>
                 {emails.length} emails
@@ -250,14 +497,36 @@ export default function EmailsPage() {
           />
           {selectedEmails.size > 0 && (
             <>
-              <button className="text-sm px-3 py-1 border rounded hover:opacity-90" style={{ borderColor: '#cad5e2', backgroundColor: 'white' }}>
+              <button 
+                className="text-sm px-3 py-1 border rounded hover:opacity-90" 
+                style={{ borderColor: '#cad5e2', backgroundColor: 'white' }}
+                disabled={actionLoading}
+              >
                 Archive
               </button>
-              <button className="text-sm px-3 py-1 border rounded hover:opacity-90" style={{ borderColor: '#cad5e2', backgroundColor: 'white' }}>
-                Delete
+              <button 
+                onClick={deleteEmails}
+                disabled={actionLoading}
+                className="text-sm px-3 py-1 border rounded hover:opacity-90" 
+                style={{ 
+                  borderColor: '#cad5e2', 
+                  backgroundColor: actionLoading ? '#f1f5f9' : 'white',
+                  cursor: actionLoading ? 'wait' : 'pointer' 
+                }}
+              >
+                {actionLoading ? 'Deleting...' : 'Delete'}
               </button>
-              <button className="text-sm px-3 py-1 border rounded hover:opacity-90" style={{ borderColor: '#cad5e2', backgroundColor: 'white' }}>
-                Mark as Read
+              <button 
+                onClick={markAsRead}
+                disabled={actionLoading}
+                className="text-sm px-3 py-1 border rounded hover:opacity-90" 
+                style={{ 
+                  borderColor: '#cad5e2', 
+                  backgroundColor: actionLoading ? '#f1f5f9' : 'white',
+                  cursor: actionLoading ? 'wait' : 'pointer' 
+                }}
+              >
+                {actionLoading ? 'Updating...' : 'Mark as Read'}
               </button>
               <span className="text-sm" style={{ color: '#45556c' }}>
                 {selectedEmails.size} selected

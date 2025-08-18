@@ -1,0 +1,40 @@
+-- Create email history table
+CREATE TABLE IF NOT EXISTS email_history (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  email_id TEXT NOT NULL,
+  thread_id TEXT,
+  action TEXT NOT NULL, -- 'delete', 'archive', 'mark_read', 'mark_unread', 'apply_rule', etc.
+  action_type TEXT NOT NULL, -- 'manual' or 'automated'
+  details JSONB, -- Store additional info like rule name, email subject, from, etc.
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for faster queries
+CREATE INDEX idx_email_history_user_id ON email_history(user_id);
+CREATE INDEX idx_email_history_created_at ON email_history(created_at DESC);
+CREATE INDEX idx_email_history_action ON email_history(action);
+
+-- Enable RLS
+ALTER TABLE email_history ENABLE ROW LEVEL SECURITY;
+
+-- Policy to allow users to see only their own history
+CREATE POLICY "Users can view own email history" ON email_history
+  FOR SELECT USING (auth.uid() = user_id);
+
+-- Policy to allow users to insert their own history
+CREATE POLICY "Users can insert own email history" ON email_history
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Function to clean up old history (older than 7 days)
+CREATE OR REPLACE FUNCTION cleanup_old_email_history()
+RETURNS void AS $$
+BEGIN
+  DELETE FROM email_history 
+  WHERE created_at < NOW() - INTERVAL '7 days';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Optional: Create a scheduled job to run cleanup daily
+-- Note: This requires pg_cron extension to be enabled in Supabase
+-- You can also call this function manually or from your app
