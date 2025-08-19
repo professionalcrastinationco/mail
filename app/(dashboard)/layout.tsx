@@ -15,8 +15,10 @@ export default function DashboardLayout({
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: '📊' },
     { href: '/emails', label: 'Inbox', icon: '📧' },
+    { href: '/safe-senders', label: 'Safe Senders', icon: '🛡️' },
     { href: '/rules', label: 'Rules', icon: '⚙️' },
     { href: '/history', label: 'History', icon: '📜' },
+    { href: '/progress', label: 'Progress', icon: '🚀' },
   ]
 
   const isActive = (href: string) => {
