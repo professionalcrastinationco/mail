@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { emailHistory } from '@/lib/email-history'
 import { gmailTokenManager } from '@/lib/gmail/token-manager'
+import SuperActionsDropdown from '@/components/super-actions/SuperActionsDropdown'
+import { toast } from '@/components/ui/Toast'
 
 interface EmailMessage {
   id: string
@@ -54,9 +56,9 @@ export default function EmailsPage() {
         throw new Error('No Gmail access token found')
       }
 
-      // Fetch the list of messages (just IDs)
+      // Fetch the list of messages (just IDs) - ONLY from INBOX
       const listResponse = await fetch(
-        'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=50',
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=50&labelIds=INBOX',
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`
@@ -198,7 +200,7 @@ export default function EmailsPage() {
   const deleteEmails = async () => {
     if (selectedEmails.size === 0) return
     
-    const confirmDelete = window.confirm(`Delete ${selectedEmails.size} email${selectedEmails.size > 1 ? 's' : ''}? This cannot be undone.`)
+    const confirmDelete = window.confirm(`Delete ${selectedEmails.size} email${selectedEmails.size > 1 ? 's' : ''}? This will move them to trash.`)
     if (!confirmDelete) return
 
     setActionLoading(true)
@@ -287,13 +289,129 @@ export default function EmailsPage() {
       
       // Show result
       if (failCount === 0) {
-        alert(`Successfully moved ${successCount} email${successCount > 1 ? 's' : ''} to trash!`)
+        toast.success(
+          `Deleted ${successCount} email${successCount > 1 ? 's' : ''}`,
+          'Emails moved to trash successfully'
+        )
       } else {
-        alert(`Moved ${successCount} email${successCount > 1 ? 's' : ''} to trash. ${failCount} failed.`)
+        toast.warning(
+          `Deleted ${successCount} email${successCount > 1 ? 's' : ''}`,
+          `${failCount} email${failCount > 1 ? 's' : ''} failed to delete`
+        )
       }
     } catch (err) {
       console.error('Error deleting emails:', err)
-      alert('Failed to delete emails. Please try again.')
+      toast.error('Failed to delete emails', 'Please try again')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const archiveEmails = async () => {
+    if (selectedEmails.size === 0) return
+    
+    setActionLoading(true)
+    
+    try {
+      const accessToken = await gmailTokenManager.getAccessToken()
+      if (!accessToken) {
+        throw new Error('No Gmail access token found')
+      }
+
+      const emailIds = Array.from(selectedEmails)
+      console.log(`Archiving ${emailIds.length} emails...`)
+
+      // Prepare history entries
+      const historyEntries = emailIds.map(emailId => {
+        const email = emails.find(e => e.id === emailId)
+        return {
+          email_id: emailId,
+          action: 'archive' as const,
+          action_type: 'manual' as const,
+          details: email ? {
+            subject: email.subject,
+            from: email.from,
+            snippet: email.snippet
+          } : undefined
+        }
+      })
+
+      // Batch the archive requests
+      const batchSize = 10
+      let successCount = 0
+      let failCount = 0
+      const successfulArchives: typeof historyEntries = []
+
+      for (let i = 0; i < emailIds.length; i += batchSize) {
+        const batch = emailIds.slice(i, i + batchSize)
+        
+        const archivePromises = batch.map(async (emailId, index) => {
+          try {
+            const response = await fetch(
+              `https://gmail.googleapis.com/gmail/v1/users/me/messages/${emailId}/modify`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  removeLabelIds: ['INBOX']
+                })
+              }
+            )
+            
+            if (response.ok) {
+              successCount++
+              const historyIndex = emailIds.indexOf(emailId)
+              successfulArchives.push(historyEntries[historyIndex])
+              return true
+            } else {
+              console.error(`Failed to archive email ${emailId}: ${response.status}`)
+              failCount++
+              return false
+            }
+          } catch (err) {
+            console.error(`Error archiving email ${emailId}:`, err)
+            failCount++
+            return false
+          }
+        })
+
+        await Promise.all(archivePromises)
+        
+        // Small delay between batches
+        if (i + batchSize < emailIds.length) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+      }
+
+      console.log(`Archive complete: ${successCount} succeeded, ${failCount} failed`)
+
+      // Track successful archives in history
+      if (successfulArchives.length > 0) {
+        await emailHistory.trackBulkActions(successfulArchives)
+      }
+
+      // Remove archived emails from the UI (they're no longer in INBOX)
+      setEmails(prev => prev.filter(email => !selectedEmails.has(email.id)))
+      setSelectedEmails(new Set())
+      
+      // Show result
+      if (failCount === 0) {
+        toast.success(
+          `Archived ${successCount} email${successCount > 1 ? 's' : ''}`,
+          'Emails archived successfully'
+        )
+      } else {
+        toast.warning(
+          `Archived ${successCount} email${successCount > 1 ? 's' : ''}`,
+          `${failCount} email${failCount > 1 ? 's' : ''} failed to archive`
+        )
+      }
+    } catch (err) {
+      console.error('Error archiving emails:', err)
+      toast.error('Failed to archive emails', 'Please try again')
     } finally {
       setActionLoading(false)
     }
@@ -378,13 +496,19 @@ export default function EmailsPage() {
       setSelectedEmails(new Set())
       
       if (failCount === 0) {
-        alert(`Marked ${successCount} email${successCount > 1 ? 's' : ''} as read!`)
+        toast.success(
+          `Marked ${successCount} email${successCount > 1 ? 's' : ''} as read`,
+          'Emails updated successfully'
+        )
       } else {
-        alert(`Marked ${successCount} email${successCount > 1 ? 's' : ''} as read. ${failCount} failed.`)
+        toast.warning(
+          `Marked ${successCount} email${successCount > 1 ? 's' : ''} as read`,
+          `${failCount} email${failCount > 1 ? 's' : ''} failed to update`
+        )
       }
     } catch (err) {
       console.error('Error marking emails as read:', err)
-      alert('Failed to mark emails as read. Please try again.')
+      toast.error('Failed to mark emails as read', 'Please try again')
     } finally {
       setActionLoading(false)
     }
@@ -395,7 +519,7 @@ export default function EmailsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading your emails...</p>
+          <p className="mt-4 text-gray-700">Loading your emails...</p>
         </div>
       </div>
     )
@@ -416,7 +540,7 @@ export default function EmailsPage() {
                 </svg>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Gmail Session Expired</h3>
-              <p className="text-gray-600 mb-6">Your Gmail connection needs to be refreshed. This happens periodically for security.</p>
+              <p className="text-gray-700 mb-6">Your Gmail connection needs to be refreshed. This happens periodically for security.</p>
               <div className="space-y-3">
                 <button 
                   onClick={async () => {
@@ -432,7 +556,7 @@ export default function EmailsPage() {
                     })
                     if (error) {
                       console.error('Re-auth error:', error)
-                      alert('Failed to reconnect to Gmail')
+                      toast.error('Failed to reconnect to Gmail', error.message)
                     }
                   }}
                   className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
@@ -470,134 +594,178 @@ export default function EmailsPage() {
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#f1f5f9' }}>
-      {/* Header */}
-      <div className="shadow-sm border-b" style={{ backgroundColor: 'white', borderColor: '#cad5e2' }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-semibold" style={{ color: '#0f172b' }}>Inbox</h1>
-              <span className="text-sm" style={{ color: '#45556c' }}>
-                {emails.length} emails
-              </span>
+    <div className="h-full flex flex-col overflow-hidden" style={{ backgroundColor: '#f1f5f9' }}>
+      {/* Fixed Header Container */}
+      <div className="flex-shrink-0" style={{ backgroundColor: 'white' }}>
+        {/* Combined Header Row */}
+        <div className="shadow-sm border-b" style={{ backgroundColor: 'white', borderColor: '#cad5e2' }}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              {/* Left side: Title and count */}
+              <div className="flex items-center space-x-6">
+                <h1 className="text-xl font-semibold" style={{ color: '#0f172b' }}>Inbox</h1>
+                <span className="text-sm" style={{ color: '#6b7280' }}>
+                  {emails.length} messages
+                </span>
+              </div>
+              
+              {/* Right side: Action buttons and Super Actions */}
+              <div className="flex items-center space-x-3">
+                {selectedEmails.size > 0 && (
+                  <>
+                    <button 
+                      onClick={archiveEmails}
+                      disabled={actionLoading}
+                      className="text-sm px-4 py-2 border rounded hover:bg-gray-50 transition-colors" 
+                      style={{ 
+                        borderColor: '#d1d5db', 
+                        backgroundColor: 'white',
+                        color: '#374151',
+                        cursor: actionLoading ? 'wait' : 'pointer' 
+                      }}
+                    >
+                      Archive
+                    </button>
+                    <button 
+                      onClick={deleteEmails}
+                      disabled={actionLoading}
+                      className="text-sm px-4 py-2 border rounded hover:bg-gray-50 transition-colors" 
+                      style={{ 
+                        borderColor: '#d1d5db', 
+                        backgroundColor: 'white',
+                        color: '#374151',
+                        cursor: actionLoading ? 'wait' : 'pointer' 
+                      }}
+                    >
+                      Delete
+                    </button>
+                    <button 
+                      onClick={markAsRead}
+                      disabled={actionLoading}
+                      className="text-sm px-4 py-2 border rounded hover:bg-gray-50 transition-colors" 
+                      style={{ 
+                        borderColor: '#d1d5db', 
+                        backgroundColor: 'white',
+                        color: '#374151',
+                        cursor: actionLoading ? 'wait' : 'pointer' 
+                      }}
+                    >
+                      Mark as Read
+                    </button>
+                    <span className="text-sm px-3" style={{ color: '#6b7280' }}>
+                      {selectedEmails.size} selected
+                    </span>
+                  </>
+                )}
+                <SuperActionsDropdown 
+                  selectedEmails={selectedEmails}
+                  allEmails={emails}
+                  onActionComplete={fetchEmails}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Column Headers with checkbox - inside max-w-7xl for alignment */}
+        <div className="border-b" style={{ backgroundColor: '#f9fafb', borderColor: '#e5e7eb' }}>
+          <div className="max-w-7xl mx-auto">
+            <div className="px-4 sm:px-6 lg:px-8">
+              <div className="flex items-center py-2">
+                <div className="w-5 mr-4">
+                  <input
+                    type="checkbox"
+                    checked={selectedEmails.size === emails.length && emails.length > 0}
+                    onChange={selectAll}
+                    className="rounded"
+                    style={{ borderColor: '#cad5e2' }}
+                  />
+                </div>
+                <div className="w-48 mr-4 flex-shrink-0">
+                  <span className="text-xs font-medium uppercase tracking-wider" style={{ color: '#6b7280' }}>From</span>
+                </div>
+                <div className="flex-1 min-w-0 mr-4">
+                  <span className="text-xs font-medium uppercase tracking-wider" style={{ color: '#6b7280' }}>Subject</span>
+                </div>
+                <div className="w-24 text-right flex-shrink-0">
+                  <span className="text-xs font-medium uppercase tracking-wider" style={{ color: '#6b7280' }}>Date</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="border-b px-4 py-2" style={{ backgroundColor: 'white', borderColor: '#cad5e2' }}>
-        <div className="max-w-7xl mx-auto flex items-center space-x-4">
-          <input
-            type="checkbox"
-            checked={selectedEmails.size === emails.length && emails.length > 0}
-            onChange={selectAll}
-            className="rounded"
-            style={{ borderColor: '#cad5e2' }}
-          />
-          {selectedEmails.size > 0 && (
-            <>
-              <button 
-                className="text-sm px-3 py-1 border rounded hover:opacity-90" 
-                style={{ borderColor: '#cad5e2', backgroundColor: 'white' }}
-                disabled={actionLoading}
-              >
-                Archive
-              </button>
-              <button 
-                onClick={deleteEmails}
-                disabled={actionLoading}
-                className="text-sm px-3 py-1 border rounded hover:opacity-90" 
-                style={{ 
-                  borderColor: '#cad5e2', 
-                  backgroundColor: actionLoading ? '#f1f5f9' : 'white',
-                  cursor: actionLoading ? 'wait' : 'pointer' 
-                }}
-              >
-                {actionLoading ? 'Deleting...' : 'Delete'}
-              </button>
-              <button 
-                onClick={markAsRead}
-                disabled={actionLoading}
-                className="text-sm px-3 py-1 border rounded hover:opacity-90" 
-                style={{ 
-                  borderColor: '#cad5e2', 
-                  backgroundColor: actionLoading ? '#f1f5f9' : 'white',
-                  cursor: actionLoading ? 'wait' : 'pointer' 
-                }}
-              >
-                {actionLoading ? 'Updating...' : 'Mark as Read'}
-              </button>
-              <span className="text-sm" style={{ color: '#45556c' }}>
-                {selectedEmails.size} selected
-              </span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Email List */}
-      <div className="max-w-7xl mx-auto">
-        <div className="shadow-sm" style={{ backgroundColor: 'white' }}>
-          {emails.length === 0 ? (
-            <div className="p-8 text-center" style={{ color: '#45556c' }}>
-              No emails found
-            </div>
-          ) : (
-            <div className="divide-y" style={{ borderColor: '#cad5e2' }}>
-              {emails.map((email) => (
-                <div
-                  key={email.id}
-                  className={`flex items-center px-4 py-3 cursor-pointer transition-colors ${
-                    email.unread ? '' : 'opacity-75'
-                  }`}
-                  style={{ 
-                    backgroundColor: email.unread ? 'white' : '#f9fafb',
-                    borderColor: '#e5e7eb'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = email.unread ? 'white' : '#f9fafb'}
-                >
-                  {/* Checkbox */}
-                  <input
-                    type="checkbox"
-                    checked={selectedEmails.has(email.id)}
-                    onChange={() => toggleEmailSelection(email.id)}
-                    className="mr-4 rounded border-gray-300"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  
-                  {/* From column - fixed width */}
-                  <div className="w-48 mr-4 flex-shrink-0">
-                    <span className={`text-sm truncate block ${
-                      email.unread ? 'font-semibold text-gray-900' : 'text-gray-700'
-                    }`}>
-                      {email.from}
-                    </span>
-                  </div>
-                  
-                  {/* Subject and snippet - flexible width */}
-                  <div className="flex-1 min-w-0 mr-4">
-                    <div className={`text-sm truncate ${
-                      email.unread ? 'font-semibold text-gray-900' : 'text-gray-700'
-                    }`}>
-                      {email.subject}
+      {/* Scrollable Email List */}
+      <div className="flex-1 overflow-hidden">
+        <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 py-6">
+          <div className="shadow-sm rounded-lg h-full flex flex-col" style={{ backgroundColor: 'white' }}>
+            {emails.length === 0 ? (
+              <div className="p-8 text-center" style={{ color: '#374151' }}>
+                No emails found
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto" style={{ backgroundColor: 'white' }}>
+                <div className="pb-4">
+                {emails.map((email, index) => (
+                  <div
+                    key={email.id}
+                    className={`flex items-center py-3 px-4 sm:px-6 lg:px-8 cursor-pointer transition-colors ${
+                      index < emails.length - 1 ? 'border-b' : ''
+                    } ${
+                      email.unread ? '' : 'opacity-75'
+                    }`}
+                    style={{ 
+                      backgroundColor: email.unread ? 'white' : '#f9fafb',
+                      borderColor: '#e5e7eb'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = email.unread ? 'white' : '#f9fafb'}
+                  >
+                    {/* Checkbox */}
+                    <div className="w-5 mr-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedEmails.has(email.id)}
+                        onChange={() => toggleEmailSelection(email.id)}
+                        className="rounded border-gray-300"
+                        onClick={(e) => e.stopPropagation()}
+                      />
                     </div>
-                    <div className="text-sm text-gray-500 truncate">
-                      {email.snippet}
+                    
+                    {/* From column - fixed width */}
+                    <div className="w-48 mr-4 flex-shrink-0">
+                      <span className={`text-sm truncate block ${
+                        email.unread ? 'font-semibold text-gray-900' : 'text-gray-700'
+                      }`}>
+                        {email.from}
+                      </span>
+                    </div>
+                    
+                    {/* Subject and snippet - flexible width */}
+                    <div className="flex-1 min-w-0 mr-4">
+                      <div className={`text-sm truncate ${
+                        email.unread ? 'font-semibold text-gray-900' : 'text-gray-700'
+                      }`}>
+                        {email.subject}
+                      </div>
+                      <div className="text-sm text-gray-500 truncate mt-1">
+                        {email.snippet}
+                      </div>
+                    </div>
+                    
+                    {/* Date column - fixed width, right-aligned */}
+                    <div className="w-24 text-right flex-shrink-0">
+                      <span className="text-sm text-gray-600">
+                        {email.date}
+                      </span>
                     </div>
                   </div>
-                  
-                  {/* Date column - fixed width, right-aligned */}
-                  <div className="w-24 text-right flex-shrink-0">
-                    <span className="text-sm text-gray-500">
-                      {email.date}
-                    </span>
-                  </div>
+                ))}
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

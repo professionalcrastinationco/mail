@@ -1,30 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
-
-interface EmailPreview {
-  id: string
-  from: string
-  subject: string
-  date: string
-}
-
-interface SuperActionOptions {
-  current: boolean
-  past: boolean
-  future: boolean
-}
 
 interface LastChancePopupProps {
   isOpen: boolean
   onClose: () => void
-  onConfirm: (options: SuperActionOptions) => void
-  actionType: 'delete' | 'archive' | 'unsubscribe'
-  senderEmail: string
-  affectedCount?: number
-  emailPreviews?: EmailPreview[]
-  loading?: boolean
+  onConfirm: () => void
+  actionType: string
+  affectedCount: number
+  actionDescription: string
+  sendersList?: string[]
+  selectedCount?: number
 }
 
 export default function LastChancePopup({
@@ -32,212 +18,179 @@ export default function LastChancePopup({
   onClose,
   onConfirm,
   actionType,
-  senderEmail,
-  affectedCount = 0,
-  emailPreviews = [],
-  loading = false
+  affectedCount,
+  actionDescription,
+  sendersList,
+  selectedCount
 }: LastChancePopupProps) {
-  const [options, setOptions] = useState<SuperActionOptions>({
-    current: true,
-    past: true,
-    future: true
-  })
-  const [showPreviews, setShowPreviews] = useState(false)
   const [confirmText, setConfirmText] = useState('')
+  const [understood, setUnderstood] = useState(false)
 
   useEffect(() => {
-    // Reset state when popup opens
     if (isOpen) {
-      setOptions({ current: true, past: true, future: true })
-      setShowPreviews(false)
       setConfirmText('')
+      setUnderstood(false)
     }
   }, [isOpen])
 
   if (!isOpen) return null
 
-  const getActionVerb = () => {
-    switch (actionType) {
-      case 'delete': return 'DELETE'
-      case 'archive': return 'ARCHIVE'
-      case 'unsubscribe': return 'UNSUBSCRIBE'
-    }
-  }
-
-  const getActionDescription = () => {
-    switch (actionType) {
-      case 'delete': return 'permanently delete'
-      case 'archive': return 'archive'
-      case 'unsubscribe': return 'unsubscribe from and delete'
-    }
-  }
+  const requiresTypedConfirmation = affectedCount > 50
+  const confirmWord = actionType.includes('delete') ? 'DELETE' : 'CONFIRM'
 
   const handleConfirm = () => {
-    // Check if at least one option is selected
-    if (!options.current && !options.past && !options.future) {
-      alert('Since you unchecked all boxes, nothing will happen. Select at least one option.')
+    if (requiresTypedConfirmation && confirmText !== confirmWord) {
+      alert(`Type "${confirmWord}" to confirm this action`)
       return
     }
-
-    // For mass deletions, require confirmation text
-    if (affectedCount > 100 && confirmText !== getActionVerb()) {
-      alert(`Type "${getActionVerb()}" to confirm this action`)
+    if (!understood) {
+      alert('Please check the box to confirm you understand')
       return
     }
-
-    onConfirm(options)
+    onConfirm()
   }
+
+  const getWarningLevel = () => {
+    if (affectedCount > 500) return { color: 'red', emoji: '🚨', text: 'EXTREME' }
+    if (affectedCount > 100) return { color: 'orange', emoji: '⚠️', text: 'HIGH' }
+    if (affectedCount > 20) return { color: 'yellow', emoji: '⚡', text: 'MODERATE' }
+    return { color: 'blue', emoji: '💡', text: 'LOW' }
+  }
+
+  const warning = getWarningLevel()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
-                <AlertTriangle className="h-5 w-5 text-yellow-500 mr-2" />
-                SUPER {getActionVerb()} - Hold Up
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                This affects: <span className="font-medium">{senderEmail}</span>
-              </p>
+        <div className={`p-6 border-b border-gray-200 bg-gradient-to-r ${
+          warning.color === 'red' ? 'from-red-500 to-red-600' :
+          warning.color === 'orange' ? 'from-orange-500 to-orange-600' :
+          warning.color === 'yellow' ? 'from-yellow-500 to-yellow-600' :
+          'from-blue-500 to-blue-600'
+        }`}>
+          <div className="text-white">
+            <div className="flex items-center space-x-2">
+              <span className="text-3xl">{warning.emoji}</span>
+              <h2 className="text-2xl font-bold">Hold Up!</h2>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            >
-              <X className="h-5 w-5 text-gray-500" />
-            </button>
+            <p className="mt-2 text-lg font-medium">
+              {warning.text} IMPACT ACTION
+            </p>
           </div>
         </div>
 
-        {/* Options */}
+        {/* Content */}
         <div className="p-6 space-y-4">
-          {/* Current email */}
-          <label className="flex items-start cursor-pointer">
-            <input
-              type="checkbox"
-              checked={options.current}
-              onChange={(e) => setOptions({ ...options, current: e.target.checked })}
-              className="mt-1 mr-3 h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
-            />
-            <div className="flex-1">
-              <p className="font-medium text-gray-900 dark:text-white">
-                {getActionVerb()} THIS email
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                The email you're currently viewing will be {getActionDescription()}d
-              </p>
-            </div>
-          </label>
-
-          {/* Past emails */}
-          <label className="flex items-start cursor-pointer">
-            <input
-              type="checkbox"
-              checked={options.past}
-              onChange={(e) => setOptions({ ...options, past: e.target.checked })}
-              className="mt-1 mr-3 h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
-            />
-            <div className="flex-1">
-              <p className="font-medium text-gray-900 dark:text-white">
-                {getActionVerb()} {affectedCount} PAST emails from this sender
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                All past emails from {senderEmail} (last 30 days only)
-              </p>
-              
-              {/* Preview toggle */}
-              {emailPreviews.length > 0 && (
-                <button
-                  onClick={() => setShowPreviews(!showPreviews)}
-                  className="mt-2 text-sm text-blue-600 hover:text-blue-700 flex items-center"
-                >
-                  {showPreviews ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-                  Show me these emails
-                </button>
-              )}
-              
-              {/* Email previews */}
-              {showPreviews && (
-                <div className="mt-3 space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded p-3">
-                  {emailPreviews.map((email) => (
-                    <div key={email.id} className="text-xs space-y-1 pb-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                      <p className="font-medium text-gray-700 dark:text-gray-300">{email.subject}</p>
-                      <p className="text-gray-500 dark:text-gray-400">
-                        {email.from} • {email.date}
-                      </p>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="font-semibold text-gray-900 mb-2">
+              You're about to:
+            </h3>
+            <p className="text-gray-700">{actionDescription}</p>
+            
+            {sendersList && sendersList.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  Affected sender{sendersList.length > 1 ? 's' : ''}:
+                </p>
+                <div className="space-y-1">
+                  {sendersList.slice(0, 5).map((sender, idx) => (
+                    <div key={idx} className="text-sm text-gray-600 pl-2">
+                      • {sender}
                     </div>
                   ))}
-                  {emailPreviews.length < affectedCount && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 italic">
-                      Showing first {emailPreviews.length} of {affectedCount} emails...
-                    </p>
+                  {sendersList.length > 5 && (
+                    <div className="text-sm text-gray-500 pl-2 italic">
+                      ... and {sendersList.length - 5} more
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
-          </label>
+              </div>
+            )}
+          </div>
 
-          {/* Future emails */}
+          <div className={`rounded-lg p-4 ${
+            warning.color === 'red' ? 'bg-red-50 border-2 border-red-200' :
+            warning.color === 'orange' ? 'bg-orange-50 border-2 border-orange-200' :
+            warning.color === 'yellow' ? 'bg-yellow-50 border-2 border-yellow-200' :
+            'bg-blue-50 border-2 border-blue-200'
+          }`}>
+            <div className="flex items-center space-x-3">
+              <span className="text-4xl font-bold">{affectedCount}</span>
+              <div>
+                <p className="font-semibold text-gray-900">Emails will be affected</p>
+                <p className="text-sm text-gray-600">This action cannot be undone easily</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Safety features reminder */}
+          <div className="bg-green-50 rounded-lg p-4">
+            <h4 className="font-semibold text-green-900 mb-2">✅ Protected emails:</h4>
+            <ul className="text-sm text-green-700 space-y-1">
+              <li>• Your safe senders list is protected</li>
+              <li>• Starred emails won't be affected</li>
+              <li>• Important/Priority emails are skipped</li>
+            </ul>
+          </div>
+
+          {/* Understanding checkbox */}
           <label className="flex items-start cursor-pointer">
             <input
               type="checkbox"
-              checked={options.future}
-              onChange={(e) => setOptions({ ...options, future: e.target.checked })}
+              checked={understood}
+              onChange={(e) => setUnderstood(e.target.checked)}
               className="mt-1 mr-3 h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
             />
             <div className="flex-1">
-              <p className="font-medium text-gray-900 dark:text-white">
-                AUTO-{getActionVerb()} all FUTURE emails from this sender
+              <p className="font-medium text-gray-900">
+                I understand this will affect {affectedCount} emails
               </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Creates a rule to automatically {getActionDescription()} future emails from {senderEmail}
+              <p className="text-sm text-gray-600">
+                I've reviewed the action and I'm ready to proceed
               </p>
             </div>
           </label>
 
-          {/* Warning for no selections */}
-          {!options.current && !options.past && !options.future && (
-            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
-              <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                ⚠️ You've unchecked all boxes. Nothing will happen if you continue.
+          {/* Confirmation for large actions */}
+          {requiresTypedConfirmation && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+              <p className="text-sm text-red-700 mb-2 font-semibold">
+                ⚠️ This is a large operation affecting {affectedCount} emails
               </p>
-            </div>
-          )}
-
-          {/* Confirmation for mass actions */}
-          {affectedCount > 100 && (
-            <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
-              <p className="text-sm text-red-700 dark:text-red-300 mb-2">
-                This will affect {affectedCount} emails. Type "{getActionVerb()}" to confirm:
+              <p className="text-sm text-red-700 mb-2">
+                Type "{confirmWord}" to confirm:
               </p>
               <input
                 type="text"
                 value={confirmText}
                 onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
-                placeholder={getActionVerb()}
-                className="w-full px-3 py-2 border border-red-300 dark:border-red-600 rounded focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:text-white"
+                placeholder={confirmWord}
+                className="w-full px-3 py-2 border border-red-300 rounded focus:ring-red-500 focus:border-red-500"
               />
             </div>
           )}
         </div>
 
         {/* Actions */}
-        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
+        <div className="p-6 border-t border-gray-200 flex justify-between">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+            className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition"
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
-            disabled={loading || (affectedCount > 100 && confirmText !== getActionVerb())}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!understood || (requiresTypedConfirmation && confirmText !== confirmWord)}
+            className={`px-6 py-2 text-white rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed ${
+              warning.color === 'red' ? 'bg-red-600 hover:bg-red-700' :
+              warning.color === 'orange' ? 'bg-orange-600 hover:bg-orange-700' :
+              warning.color === 'yellow' ? 'bg-yellow-600 hover:bg-yellow-700' :
+              'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
-            {loading ? 'Processing...' : `Fuck It, ${getActionVerb()} Them`}
+            Yes, Execute Action
           </button>
         </div>
       </div>

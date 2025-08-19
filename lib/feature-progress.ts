@@ -83,16 +83,16 @@ export const features = {
     superActionsDropdown: {
       name: 'Super Actions Dropdown',
       description: 'Dropdown menu with delete/archive actions',
-      status: 'not-started',
-      effort: '2 hours',
-      notes: 'Core feature - this is the main selling point'
+      status: 'complete',
+      completedDate: '2025-08-18',
+      effort: '2 hours'
     },
     trainingMode: {
       name: 'Training Mode Warnings',
       description: 'Warnings and confirmations for destructive actions',
-      status: 'not-started',
-      effort: '1 hour',
-      notes: 'LastChancePopup component exists, needs wiring'
+      status: 'complete',
+      completedDate: '2025-08-18',
+      effort: '1 hour'
     },
     progressiveUnlock: {
       name: 'Progressive Unlock System',

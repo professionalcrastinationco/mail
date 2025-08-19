@@ -101,7 +101,7 @@ export default function SafeSendersPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading safe senders...</p>
+          <p className="mt-4 text-gray-700">Loading safe senders...</p>
         </div>
       </div>
     )
@@ -117,7 +117,7 @@ export default function SafeSendersPage() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
               <h1 className="text-xl font-semibold" style={{ color: '#0f172b' }}>Safe Senders</h1>
-              <span className="text-sm" style={{ color: '#45556c' }}>
+              <span className="text-sm" style={{ color: '#374151' }}>
                 {safeSenders.length} protected sender{safeSenders.length !== 1 ? 's' : ''}
               </span>
             </div>
@@ -134,7 +134,7 @@ export default function SafeSendersPage() {
               <h2 className="text-lg font-semibold mb-2" style={{ color: '#0f172b' }}>
                 {needsMoreSenders ? 'Add More Safe Senders' : 'Safe Senders Protected'}
               </h2>
-              <p className="text-sm mb-3" style={{ color: '#45556c' }}>
+              <p className="text-sm mb-3" style={{ color: '#374151' }}>
                 Safe senders are email addresses that will never be affected by Super Actions. 
                 Add important contacts like family, boss, or critical services.
               </p>
@@ -158,7 +158,7 @@ export default function SafeSendersPage() {
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               placeholder="email@example.com"
-              className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-600"
               style={{ borderColor: '#cad5e2' }}
               disabled={adding}
             />
@@ -181,7 +181,7 @@ export default function SafeSendersPage() {
           </div>
           
           {safeSenders.length === 0 ? (
-            <div className="p-8 text-center" style={{ color: '#45556c' }}>
+            <div className="p-8 text-center" style={{ color: '#374151' }}>
               <p className="text-lg mb-2">No safe senders yet</p>
               <p className="text-sm">Add email addresses you want to protect from automated actions</p>
             </div>
@@ -193,7 +193,7 @@ export default function SafeSendersPage() {
                     <p className="font-medium" style={{ color: '#0f172b' }}>
                       {sender.email_address}
                     </p>
-                    <p className="text-xs" style={{ color: '#45556c' }}>
+                    <p className="text-xs" style={{ color: '#374151' }}>
                       Added {new Date(sender.added_at).toLocaleDateString()}
                     </p>
                   </div>
@@ -214,7 +214,7 @@ export default function SafeSendersPage() {
           <h4 className="font-semibold mb-3" style={{ color: '#0f172b' }}>
             💡 Suggested Safe Senders
           </h4>
-          <ul className="space-y-2 text-sm" style={{ color: '#45556c' }}>
+          <ul className="space-y-2 text-sm" style={{ color: '#374151' }}>
             <li>• Your boss or manager's email</li>
             <li>• Family members (spouse, parents, kids)</li>
             <li>• Your bank or financial institutions</li>

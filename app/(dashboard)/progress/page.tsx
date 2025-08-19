@@ -26,7 +26,7 @@ export default function ProgressPage() {
       case 'complete': return 'bg-green-100 text-green-800'
       case 'in-progress': return 'bg-yellow-100 text-yellow-800'
       case 'blocked': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-600'
+      default: return 'bg-gray-100 text-gray-700'
     }
   }
 
@@ -60,7 +60,7 @@ export default function ProgressPage() {
                 style={{ width: `${overallProgress}%` }}
               />
             </div>
-            <span className="text-lg font-semibold">{overallProgress}% MVP Complete</span>
+            <span className="text-lg font-semibold text-gray-800">{overallProgress}% MVP Complete</span>
           </div>
         </div>
 
@@ -70,25 +70,25 @@ export default function ProgressPage() {
             <div className="text-2xl font-bold text-green-600">
               {Object.values(progress.phase1).filter(f => f.status === 'complete').length}
             </div>
-            <div className="text-sm text-gray-600">Features Complete</div>
+            <div className="text-sm text-gray-700">Features Complete</div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow">
             <div className="text-2xl font-bold text-yellow-600">
               {Object.values(progress.phase1).filter(f => f.status === 'in-progress').length}
             </div>
-            <div className="text-sm text-gray-600">In Progress</div>
+            <div className="text-sm text-gray-700">In Progress</div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow">
             <div className="text-2xl font-bold text-red-600">
               {Object.values(progress.phase1).filter(f => f.status === 'blocked').length}
             </div>
-            <div className="text-sm text-gray-600">Blocked</div>
+            <div className="text-sm text-gray-700">Blocked</div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow">
             <div className="text-2xl font-bold text-gray-600">
               {Object.values(progress.phase1).filter(f => f.status === 'not-started').length}
             </div>
-            <div className="text-sm text-gray-600">Not Started</div>
+            <div className="text-sm text-gray-700">Not Started</div>
           </div>
         </div>
 
@@ -103,14 +103,14 @@ export default function ProgressPage() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-gray-900">{phase.name}</h2>
                 <div className="flex items-center space-x-3">
-                  <span className="text-sm text-gray-600">{phase.target}</span>
+                  <span className="text-sm text-gray-700">{phase.target}</span>
                   <div className="w-32 bg-gray-200 rounded-full h-2">
                     <div 
                       className="bg-blue-600 h-2 rounded-full transition-all duration-500"
                       style={{ width: `${phaseProgress}%` }}
                     />
                   </div>
-                  <span className="text-sm font-medium">{phaseProgress}%</span>
+                  <span className="text-sm font-medium text-gray-800">{phaseProgress}%</span>
                 </div>
               </div>
               
@@ -127,18 +127,18 @@ export default function ProgressPage() {
                               {feature.status.replace('-', ' ')}
                             </span>
                           </div>
-                          <p className="text-sm text-gray-600 mt-1 ml-8">{feature.description}</p>
+                          <p className="text-sm text-gray-700 mt-1 ml-8">{feature.description}</p>
                           {feature.notes && (
                             <p className="text-xs text-amber-600 mt-1 ml-8">⚠️ {feature.notes}</p>
                           )}
                           {feature.completedDate && (
-                            <p className="text-xs text-gray-500 mt-1 ml-8">
+                            <p className="text-xs text-gray-600 mt-1 ml-8">
                               Completed: {feature.completedDate}
                             </p>
                           )}
                         </div>
                         {feature.effort && (
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-gray-700">
                             {feature.effort}
                           </div>
                         )}

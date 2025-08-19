@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { ToastContainer } from '@/components/ui/Toast'
 
 export default function DashboardLayout({
   children,
@@ -26,10 +27,11 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex bg-gray-50">
-      {/* Sidebar */}
-      <div className={`${isSidebarOpen ? 'w-64' : 'w-20'} transition-all duration-300 bg-white border-r border-gray-200 min-h-screen`}>
-        <div className="p-4">
+    <>
+      <div className="flex h-full bg-gray-50 overflow-hidden">
+        {/* Sidebar */}
+      <div className={`${isSidebarOpen ? 'w-64' : 'w-20'} transition-all duration-300 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col`}>
+        <div className="flex-1 flex flex-col p-4 overflow-y-auto">
           {/* Toggle button */}
           <div className="flex justify-end mb-8">
             <button
@@ -48,7 +50,7 @@ export default function DashboardLayout({
           </div>
 
           {/* Navigation */}
-          <nav className="space-y-1">
+          <nav className="flex-1 space-y-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -56,7 +58,7 @@ export default function DashboardLayout({
                 className={`flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 ${
                   isActive(item.href) 
                     ? 'bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 font-medium' 
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    : 'text-gray-800 hover:bg-gray-50 hover:text-gray-900'
                 }`}
               >
                 <span className="text-xl flex-shrink-0">{item.icon}</span>
@@ -68,12 +70,12 @@ export default function DashboardLayout({
           </nav>
 
           {/* Bottom section - Sign out */}
-          <div className="absolute bottom-4 left-4 right-4">
+          <div className="mt-auto pt-4">
             {isSidebarOpen && (
               <form action="/api/auth/signout" method="POST">
                 <button
                   type="submit"
-                  className="w-full px-3 py-2 text-sm rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 text-left transition-colors"
+                  className="w-full px-3 py-2 text-sm rounded-lg text-gray-800 hover:bg-gray-50 hover:text-gray-900 text-left transition-colors"
                 >
                   Sign Out
                 </button>
@@ -84,9 +86,11 @@ export default function DashboardLayout({
       </div>
 
       {/* Main content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {children}
       </div>
     </div>
+      <ToastContainer />
+    </>
   )
 }
