@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 
 export default function DashboardLayout({
   children,
@@ -12,7 +11,6 @@ export default function DashboardLayout({
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const pathname = usePathname()
-  const supabase = createClient()
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: '📊' },
@@ -26,48 +24,40 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: '#f1f5f9' }}>
+    <div className="flex bg-gray-50">
       {/* Sidebar */}
-      <div 
-        className={`${isSidebarOpen ? 'w-64' : 'w-16'} transition-all duration-300 shadow-lg`}
-        style={{ backgroundColor: 'white', borderRight: '1px solid #cad5e2' }}
-      >
+      <div className={`${isSidebarOpen ? 'w-64' : 'w-20'} transition-all duration-300 bg-white border-r border-gray-200 min-h-screen`}>
         <div className="p-4">
-          {/* Logo/Brand */}
-          <div className="flex items-center justify-between mb-8">
-            <Link 
-              href="/dashboard" 
-              className={`font-bold text-xl ${!isSidebarOpen && 'hidden'}`}
-              style={{ color: '#0f172b' }}
-            >
-              Gmail Assistant
-            </Link>
+          {/* Toggle button */}
+          <div className="flex justify-end mb-8">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 rounded hover:bg-gray-100"
-              style={{ color: '#45556c' }}
+              className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+              aria-label="Toggle sidebar"
             >
-              {isSidebarOpen ? '←' : '→'}
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {isSidebarOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                )}
+              </svg>
             </button>
           </div>
 
           {/* Navigation */}
-          <nav className="space-y-2">
+          <nav className="space-y-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center px-3 py-2 rounded-lg transition-colors ${
+                className={`flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 ${
                   isActive(item.href) 
-                    ? 'font-semibold' 
-                    : 'hover:bg-gray-50'
+                    ? 'bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 font-medium' 
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
-                style={{
-                  backgroundColor: isActive(item.href) ? '#f1f5f9' : 'transparent',
-                  color: isActive(item.href) ? '#0f172b' : '#45556c',
-                }}
               >
-                <span className="text-xl">{item.icon}</span>
+                <span className="text-xl flex-shrink-0">{item.icon}</span>
                 {isSidebarOpen && (
                   <span className="ml-3">{item.label}</span>
                 )}
@@ -81,8 +71,7 @@ export default function DashboardLayout({
               <form action="/api/auth/signout" method="POST">
                 <button
                   type="submit"
-                  className="w-full px-3 py-2 text-sm rounded-lg hover:bg-gray-50 text-left"
-                  style={{ color: '#45556c' }}
+                  className="w-full px-3 py-2 text-sm rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 text-left transition-colors"
                 >
                   Sign Out
                 </button>

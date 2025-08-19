@@ -1,0 +1,11 @@
+// Note: To properly display favicons in all browsers, convert your PNG to ICO format
+// You can use online tools like:
+// - https://www.icoconverter.com/
+// - https://favicon.io/favicon-converter/
+// 
+// Or use ImageMagick locally:
+// magick convert favicon-256.png -define icon:auto-resize=64,48,32,16 favicon.ico
+//
+// Then place the favicon.ico file in the /app directory
+
+// This file is intentionally empty - Next.js will use the PNG favicons from /public

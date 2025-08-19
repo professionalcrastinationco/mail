@@ -552,44 +552,47 @@ export default function EmailsPage() {
                     email.unread ? '' : 'opacity-75'
                   }`}
                   style={{ 
-                    backgroundColor: email.unread ? 'white' : '#f1f5f9',
-                    borderColor: '#cad5e2'
+                    backgroundColor: email.unread ? 'white' : '#f9fafb',
+                    borderColor: '#e5e7eb'
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = email.unread ? 'white' : '#f1f5f9'}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = email.unread ? 'white' : '#f9fafb'}
                 >
+                  {/* Checkbox */}
                   <input
                     type="checkbox"
                     checked={selectedEmails.has(email.id)}
                     onChange={() => toggleEmailSelection(email.id)}
-                    className="mr-4 rounded"
-                    style={{ borderColor: '#cad5e2' }}
+                    className="mr-4 rounded border-gray-300"
                     onClick={(e) => e.stopPropagation()}
                   />
                   
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 mr-4">
-                        <div className="flex items-center mb-1">
-                          <span className={`text-sm truncate ${
-                            email.unread ? 'font-semibold' : ''
-                          }`} style={{ color: email.unread ? '#0f172b' : '#314158' }}>
-                            {email.from}
-                          </span>
-                        </div>
-                        <div className={`text-sm ${
-                          email.unread ? 'font-semibold' : ''
-                        }`} style={{ color: email.unread ? '#1d293d' : '#314158' }}>
-                          {email.subject}
-                        </div>
-                        <div className="text-sm truncate" style={{ color: '#45556c' }}>
-                          {email.snippet}
-                        </div>
-                      </div>
-                      <div className="text-sm whitespace-nowrap ml-2" style={{ color: '#45556c' }}>
-                        {email.date}
-                      </div>
+                  {/* From column - fixed width */}
+                  <div className="w-48 mr-4 flex-shrink-0">
+                    <span className={`text-sm truncate block ${
+                      email.unread ? 'font-semibold text-gray-900' : 'text-gray-700'
+                    }`}>
+                      {email.from}
+                    </span>
+                  </div>
+                  
+                  {/* Subject and snippet - flexible width */}
+                  <div className="flex-1 min-w-0 mr-4">
+                    <div className={`text-sm truncate ${
+                      email.unread ? 'font-semibold text-gray-900' : 'text-gray-700'
+                    }`}>
+                      {email.subject}
                     </div>
+                    <div className="text-sm text-gray-500 truncate">
+                      {email.snippet}
+                    </div>
+                  </div>
+                  
+                  {/* Date column - fixed width, right-aligned */}
+                  <div className="w-24 text-right flex-shrink-0">
+                    <span className="text-sm text-gray-500">
+                      {email.date}
+                    </span>
                   </div>
                 </div>
               ))}
